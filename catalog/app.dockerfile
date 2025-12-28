@@ -1,13 +1,47 @@
-FROM golang:1.13-alpine3.11 AS build
-RUN apk --no-cache add gcc g++ make ca-certificates
-WORKDIR /go/src/github.com/suryanshp1/go-microservice
-COPY go.mod go.sum ./
-COPY vendor vendor
-COPY catalog catalog
-RUN GO111MODULE=on go build -mod vendor -o /go/bin/app ./catalog/cmd/catalog
+# ------------------------------------------------------------
+# Stage 1: Build
+# ------------------------------------------------------------
+FROM golang:1.24.4-alpine AS builder
 
-FROM alpine:3.11
-WORKDIR /usr/bin
-COPY --from=build /go/bin .
+# Install only what is required for build
+RUN apk add --no-cache ca-certificates git
+
+# Enable reproducible builds
+ENV CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64
+
+WORKDIR /app
+
+# Copy only dependency files first (better cache)
+COPY go.mod go.sum ./
+
+# Download deps separately for caching
+RUN go mod download
+
+# Copy source code
+COPY catalog ./catalog
+
+# Build binary
+RUN go build \
+    -trimpath \
+    -ldflags="-s -w" \
+    -o app \
+    ./catalog/cmd/catalog
+
+# ------------------------------------------------------------
+# Stage 2: Runtime
+# ------------------------------------------------------------
+FROM gcr.io/distroless/base-debian12 AS runtime
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /app/app .
+
+# Use non-root user (security)
+USER nonroot:nonroot
+
 EXPOSE 8080
-CMD ["app"]
+
+ENTRYPOINT ["/app/app"]
