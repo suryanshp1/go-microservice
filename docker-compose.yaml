@@ -1,14 +1,13 @@
-version: "3.7"
-
 services:
   account:
     build:
       context: .
       dockerfile: ./account/app.dockerfile
     depends_on:
-      - account_db
+      account_db:
+        condition: service_healthy
     environment:
-      DATABASE_URL: postgres://akhil:123456@account_db/akhil?sslmode=disable
+      DATABASE_URL: postgres://akhil:123456@account_db:5432/akhil?sslmode=disable
     restart: on-failure
 
   catalog:
@@ -16,7 +15,8 @@ services:
       context: .
       dockerfile: ./catalog/app.dockerfile
     depends_on:
-      - catalog_db
+      catalog_db:
+        condition: service_healthy
     environment:
       DATABASE_URL: http://catalog_db:9200
     restart: on-failure
@@ -26,9 +26,14 @@ services:
       context: .
       dockerfile: ./order/app.dockerfile
     depends_on:
-      - order_db
+      order_db:
+        condition: service_healthy
+      account:
+        condition: service_started
+      catalog:
+        condition: service_started
     environment:
-      DATABASE_URL: postgres://akhil:123456@order_db/akhil?sslmode=disable
+      DATABASE_URL: postgres://akhil:123456@order_db:5432/akhil?sslmode=disable
       ACCOUNT_SERVICE_URL: account:8080
       CATALOG_SERVICE_URL: catalog:8080
     restart: on-failure
@@ -42,6 +47,7 @@ services:
     depends_on:
       - account
       - catalog
+      - order
     environment:
       ACCOUNT_SERVICE_URL: account:8080
       CATALOG_SERVICE_URL: catalog:8080
@@ -57,12 +63,25 @@ services:
       POSTGRES_USER: akhil
       POSTGRES_PASSWORD: 123456
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U akhil -d akhil"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   catalog_db:
-    image: docker.elastic.co/elasticsearch/elasticsearch:6.2.4
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    platform: linux/arm64
     environment:
-      ES_JAVA_OPTS: -Xms1g -Xmx1g
-      discovery.type: single-node
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
 
   order_db:
     build:
@@ -73,3 +92,8 @@ services:
       POSTGRES_USER: akhil
       POSTGRES_PASSWORD: 123456
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U akhil -d akhil"]
+      interval: 5s
+      timeout: 5s
+      retries: 10

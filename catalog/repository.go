@@ -36,10 +36,25 @@ func NewElasticRepository(url string) (Repository, error) {
 	client, err := elastic.NewClient(
 		elastic.SetURL(url),
 		elastic.SetSniff(false),
+		elastic.SetHealthcheck(true),
 	)
 	if err != nil {
 		return nil, err
 	}
+	
+	// Create index if it doesn't exist
+	ctx := context.Background()
+	exists, err := client.IndexExists("catalog").Do(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		_, err = client.CreateIndex("catalog").Do(ctx)
+		if err != nil {
+			log.Printf("Warning: could not create index: %v", err)
+		}
+	}
+	
 	return &elasticRepository{client: client}, nil
 }
 
@@ -50,7 +65,6 @@ func (r *elasticRepository) Close() {
 func (r *elasticRepository) PutProduct(ctx context.Context, p *Product) error {
 	_, err := r.client.Index().
 		Index("catalog").
-		Type("product").
 		Id(p.ID).
 		BodyJson(productDocument{
 			Name:        p.Name,
@@ -64,7 +78,6 @@ func (r *elasticRepository) PutProduct(ctx context.Context, p *Product) error {
 func (r *elasticRepository) GetProductByID(ctx context.Context, id string) (*Product, error) {
 	res, err := r.client.Get().
 		Index("catalog").
-		Type("product").
 		Id(id).
 		Do(ctx)
 
@@ -97,7 +110,6 @@ func (r *elasticRepository) GetProductByID(ctx context.Context, id string) (*Pro
 func (r *elasticRepository) ListProducts(ctx context.Context, skip uint64, take uint64) ([]*Product, error) {
 	res, err := r.client.Search().
 		Index("catalog").
-		Type("product").
 		Query(elastic.NewMatchAllQuery()).
 		From(int(skip)).
 		Size(int(take)).
@@ -127,7 +139,7 @@ func (r *elasticRepository) ListProducts(ctx context.Context, skip uint64, take 
 func (r *elasticRepository) ListProductsWithIDs(ctx context.Context, ids []string) ([]*Product, error) {
 	items := []*elastic.MultiGetItem{}
 	for _, id := range ids {
-		items = append(items, elastic.NewMultiGetItem().Index("catalog").Type("product").Id(id))
+		items = append(items, elastic.NewMultiGetItem().Index("catalog").Id(id))
 	}
 
 	res, err := r.client.MultiGet().
@@ -161,7 +173,6 @@ func (r *elasticRepository) ListProductsWithIDs(ctx context.Context, ids []strin
 func (r *elasticRepository) SearchProducts(ctx context.Context, query string, skip uint64, take uint64) ([]*Product, error) {
 	res, err := r.client.Search().
 		Index("catalog").
-		Type("product").
 		Query(elastic.NewMultiMatchQuery(query, "name", "description")).
 		From(int(skip)).
 		Size(int(take)).
