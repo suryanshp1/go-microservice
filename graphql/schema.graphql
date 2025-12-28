@@ -3,7 +3,6 @@ scalar Time
 type Account {
   id: String!
   name: String!
-  email: String!
   orders: [Order!]!
 }
 
@@ -11,7 +10,7 @@ type Product {
   id: String!
   name: String!
   price: Float!
-  description: String
+  description: String!
 }
 
 type Order {
@@ -41,7 +40,7 @@ input AccountInput {
 input ProductInput {
   name: String!
   price: Float!
-  description: String
+  description: String!
 }
 
 input OrderProductInput {

@@ -49,7 +49,6 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	Account struct {
-		Email  func(childComplexity int) int
 		ID     func(childComplexity int) int
 		Name   func(childComplexity int) int
 		Orders func(childComplexity int) int
@@ -90,7 +89,6 @@ type ComplexityRoot struct {
 }
 
 type AccountResolver interface {
-	Email(ctx context.Context, obj *Account) (string, error)
 	Orders(ctx context.Context, obj *Account) ([]*Order, error)
 }
 type MutationResolver interface {
@@ -122,12 +120,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	_ = ec
 	switch typeName + "." + field {
 
-	case "Account.email":
-		if e.complexity.Account.Email == nil {
-			break
-		}
-
-		return e.complexity.Account.Email(childComplexity), true
 	case "Account.id":
 		if e.complexity.Account.ID == nil {
 			break
@@ -605,35 +597,6 @@ func (ec *executionContext) fieldContext_Account_name(_ context.Context, field g
 	return fc, nil
 }
 
-func (ec *executionContext) _Account_email(ctx context.Context, field graphql.CollectedField, obj *Account) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Account_email,
-		func(ctx context.Context) (any, error) {
-			return ec.resolvers.Account().Email(ctx, obj)
-		},
-		nil,
-		ec.marshalNString2string,
-		true,
-		true,
-	)
-}
-
-func (ec *executionContext) fieldContext_Account_email(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Account",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Account_orders(ctx context.Context, field graphql.CollectedField, obj *Account) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -702,8 +665,6 @@ func (ec *executionContext) fieldContext_Mutation_createAccount(ctx context.Cont
 				return ec.fieldContext_Account_id(ctx, field)
 			case "name":
 				return ec.fieldContext_Account_name(ctx, field)
-			case "email":
-				return ec.fieldContext_Account_email(ctx, field)
 			case "orders":
 				return ec.fieldContext_Account_orders(ctx, field)
 			}
@@ -1196,9 +1157,9 @@ func (ec *executionContext) _Product_description(ctx context.Context, field grap
 			return obj.Description, nil
 		},
 		nil,
-		ec.marshalOString2ᚖstring,
+		ec.marshalNString2string,
 		true,
-		false,
+		true,
 	)
 }
 
@@ -1244,8 +1205,6 @@ func (ec *executionContext) fieldContext_Query_accounts(ctx context.Context, fie
 				return ec.fieldContext_Account_id(ctx, field)
 			case "name":
 				return ec.fieldContext_Account_name(ctx, field)
-			case "email":
-				return ec.fieldContext_Account_email(ctx, field)
 			case "orders":
 				return ec.fieldContext_Account_orders(ctx, field)
 			}
@@ -3030,7 +2989,7 @@ func (ec *executionContext) unmarshalInputProductInput(ctx context.Context, obj 
 			it.Price = data
 		case "description":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			data, err := ec.unmarshalNString2string(ctx, v)
 			if err != nil {
 				return it, err
 			}
@@ -3070,42 +3029,6 @@ func (ec *executionContext) _Account(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
-		case "email":
-			field := field
-
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Account_email(ctx, field, obj)
-				if res == graphql.Null {
-					atomic.AddUint32(&fs.Invalids, 1)
-				}
-				return res
-			}
-
-			if field.Deferrable != nil {
-				dfs, ok := deferred[field.Deferrable.Label]
-				di := 0
-				if ok {
-					dfs.AddField(field)
-					di = len(dfs.Values) - 1
-				} else {
-					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
-					deferred[field.Deferrable.Label] = dfs
-				}
-				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
-					return innerFunc(ctx, dfs)
-				})
-
-				// don't run the out.Concurrently() call below
-				out.Values[i] = graphql.Null
-				continue
-			}
-
-			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "orders":
 			field := field
 
@@ -3360,6 +3283,9 @@ func (ec *executionContext) _Product(ctx context.Context, sel ast.SelectionSet, 
 			}
 		case "description":
 			out.Values[i] = ec._Product_description(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}

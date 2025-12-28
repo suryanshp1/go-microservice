@@ -47,13 +47,13 @@ type Product struct {
 	ID          string  `json:"id"`
 	Name        string  `json:"name"`
 	Price       float64 `json:"price"`
-	Description *string `json:"description,omitempty"`
+	Description string  `json:"description"`
 }
 
 type ProductInput struct {
 	Name        string  `json:"name"`
 	Price       float64 `json:"price"`
-	Description *string `json:"description,omitempty"`
+	Description string  `json:"description"`
 }
 
 type Query struct {
